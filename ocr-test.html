@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>OCR Test - POC</title>
+  <style>
+    body { background: #111; color: #fff; font-family: sans-serif; padding: 20px; }
+    canvas { border: 2px solid #fff200; background: #222; cursor: crosshair; display: block; margin-bottom: 10px; }
+    button { background: transparent; border: 2px solid #fff; color: #fff; padding: 8px 20px; cursor: pointer; font-size: 16px; margin-right: 8px; }
+    p { color: #aaa; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h2>OCR Test — POC</h2>
+  <canvas id="canvas" width="400" height="400"></canvas>
+  <button id="btnClear">Clear</button>
+  <p>결과는 콘솔(F12)에서 확인 · CORS로 인해 직접 호출 불가 → 서버 프록시 필요 확인됨</p>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let strokes = [];
+    let currentStroke = [];
+    let isDrawing = false;
+
+    canvas.addEventListener('mousedown', e => {
+      const r = canvas.getBoundingClientRect();
+      isDrawing = true;
+      currentStroke = [{ x: e.clientX - r.left, y: e.clientY - r.top }];
+    });
+
+    canvas.addEventListener('mousemove', e => {
+      if (!isDrawing || currentStroke.length === 0) return;
+      const r = canvas.getBoundingClientRect();
+      const pt = { x: e.clientX - r.left, y: e.clientY - r.top };
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      const last = currentStroke[currentStroke.length - 1];
+      ctx.moveTo(last.x, last.y);
+      ctx.lineTo(pt.x, pt.y);
+      ctx.stroke();
+      currentStroke.push(pt);
+    });
+
+    window.addEventListener('mouseup', async () => {
+      if (!isDrawing) return;
+      isDrawing = false;
+      if (currentStroke.length > 1) {
+        strokes.push(currentStroke);
+        await runOCR();
+      }
+      currentStroke = [];
+    });
+
+    document.getElementById('btnClear').addEventListener('click', () => {
+      strokes = [];
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+
+    function compressStrokes(rawStrokes) {
+      return rawStrokes.map(stroke => ({
+        s: stroke.length,
+        xy: stroke.map(p => [
+          Math.floor(p.x * (283 / 399)),
+          Math.floor(p.y * (283 / 399))
+        ])
+      }));
+    }
+
+    function buildInputStr(infoStroke) {
+      let result = '%3DR%20' + infoStroke.length;
+      infoStroke.forEach(s => {
+        result += '%0A%3DS%20' + s.s + '%0A';
+        s.xy.forEach(([x, y]) => result += x + '%20' + y + '%20');
+      });
+      return result;
+    }
+
+    async function runOCR() {
+      const inputStr = buildInputStr(compressStrokes(strokes));
+      // CORS로 인해 브라우저에서 직접 호출 불가 — 서버 프록시 방식 필요
+      const url = `https://hw.dict.naver.com/hanja/recognize?dicType=hanjaauto=1&type=1&charset=8&ReqNum=1&InputStr=${inputStr}`;
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        console.log('OCR result:', data);
+      } catch (err) {
+        console.error('CORS error → 서버 프록시 방식 필요:', err.message);
+      }
+    }
+  </script>
+</body>
+</html>
