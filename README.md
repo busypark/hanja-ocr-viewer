@@ -1,24 +1,18 @@
-﻿# 프로젝트 초기 설정
+﻿# 네이버 한자 OCR API 서버 프록시 구현
 
-Node.js 프로젝트 초기화 및 개발에 필요한 의존성 설치.
+브라우저에서 직접 호출할 수 없는 네이버 OCR API를 Express 서버에서 중계.
 
 ## 변경사항
 
-- `package.json` 생성 (`"type": "module"`, `npm start` 스크립트)
-- `server.js` 기본 골격 생성 (Express + CORS 미들웨어, 엔드포인트 없음)
-- 의존성 설치: `express` `cors` `axios` `cheerio` `node-fetch` `puppeteer` `sharp`
+- `server.js`: `/api/ocr` POST 엔드포인트 추가
+  - 획 좌표를 URL 인코딩 포맷(`%3DR%20...`)으로 압축하여 네이버 API에 전달
+  - 호출 대상: `hw.dict.naver.com/hanja/recognize`
+- `public/js/mainScript.js`: `compressStrokes()`, `buildInputStr()`, `runOCR()` 추가 (결과는 콘솔 출력)
 
-## 파일
+## API
 
-| 파일 | 설명 |
-|------|------|
-| `package.json` | 프로젝트 메타 및 의존성 |
-| `server.js` | Express 서버 기본 구조 |
-
-## 실행
-
-```bash
-npm install
-npm start
-# → http://localhost:3000 (아직 정적 파일 없음)
+```
+POST /api/ocr
+Body:     { "inputStr": "URL인코딩된 획 데이터" }
+Response: { "content": "한자,설명;한자,설명;..." }
 ```
