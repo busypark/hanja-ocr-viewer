@@ -117,12 +117,18 @@ document.addEventListener("DOMContentLoaded", () => {
     return s;
   }
 
+  const ocrResultTable = document.getElementById("ocrResultTable");
+
   async function runOCR(rawStrokes) {
+    const cells = ocrResultTable.querySelectorAll("td");
+
     if (!rawStrokes || rawStrokes.length === 0) {
-      console.log("OCR: no strokes");
+      cells.forEach(c => c.innerHTML = "");
       return;
     }
+
     const inputStr = buildInputStr(compressStrokes(rawStrokes));
+
     try {
       const res = await fetch("/api/ocr", {
         method: "POST",
@@ -130,7 +136,16 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify({ inputStr })
       });
       const data = await res.json();
-      console.log("OCR result:", data);
+      const items = data.content.split(";").filter(Boolean);
+
+      cells.forEach(c => c.innerHTML = "");
+      let idx = 0;
+      for (let i = 0; i < Math.min(items.length, 20); i++) {
+        const [char, desc] = items[i].split(",");
+        if (!desc) continue;
+        cells[idx].innerHTML = `<div style="font-size:40px;color:gold;text-align:center">${char}</div><div style="font-size:18px;text-align:center">${desc}</div>`;
+        idx++;
+      }
     } catch (err) {
       console.error("OCR 요청 실패:", err);
     }
