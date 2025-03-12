@@ -1,24 +1,24 @@
-﻿# 프로젝트 초기 설정
+﻿# 한자 뜻·기원 설명 추출 기능 구현
 
-Node.js 프로젝트 초기화 및 개발에 필요한 의존성 설치.
+네이버 한자사전 내부 API에서 뜻 목록(Meaning)과 기원 설명(Pedigree)을 파싱하여 표시.
 
 ## 변경사항
 
-- `package.json` 생성 (`"type": "module"`, `npm start` 스크립트)
-- `server.js` 기본 골격 생성 (Express + CORS 미들웨어, 엔드포인트 없음)
-- 의존성 설치: `express` `cors` `axios` `cheerio` `node-fetch` `puppeteer` `sharp`
+- `server.js`: `/api/ExtractMP` POST 엔드포인트 추가
+  1. 한자 검색 API → `destinationLink`에서 entryId 추출
+  2. Entry 상세 API → `means` 배열 파싱 (뜻 목록, 들여쓰기 레벨 적용)
+  3. `group.learningMores` → 기원 설명 텍스트 추출 (HTML div 포함 시 cheerio 파싱)
+- `public/js/mainScript.js`: ExtractMP 버튼 핸들러, TA_1(뜻) + TA_2(기원) 표시
 
-## 파일
+## API
 
-| 파일 | 설명 |
-|------|------|
-| `package.json` | 프로젝트 메타 및 의존성 |
-| `server.js` | Express 서버 기본 구조 |
-
-## 실행
-
-```bash
-npm install
-npm start
-# → http://localhost:3000 (아직 정적 파일 없음)
 ```
+POST /api/ExtractMP
+Body:     { "text": "한자" }
+Response: { "success": true, "data": { "MP": "뜻 목록", "learningMoreList": "[...]" } }
+```
+
+## 화면
+
+![](./images/a.jpg)
+<p align="center"><ExtractMP 실행 후 뜻 목록(TA_1)과 기원 설명(TA_2) 표시></p>
