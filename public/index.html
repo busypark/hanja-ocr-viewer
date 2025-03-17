@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1080">
+  <title>한자학습 Web APP</title>
+  <link rel="stylesheet" href="./css/mainStyle.css">
+</head>
+<body>
+  <div id="mainTabComponent">
+    <div class="tab-content" style="background-color: #050505;">
+      <div id="searchTab" class="tab-panel active">
+
+        <canvas id="ocrCanvas" width="400" height="400"
+          data-canvas-mode="pen" data-strokes="[]"></canvas>
+
+        <button id="btnPen"   style="position:absolute; left:214px; top:480px; width:130px; height:100px;">Pen</button>
+        <button id="btnErase" style="position:absolute; left:344px; top:480px; width:130px; height:100px;">Erase</button>
+        <button id="btnClear" style="position:absolute; left:474px; top:480px; width:130px; height:100px;">Clear</button>
+
+        <table id="ocrResultTable" style="position:absolute; bottom:100px; left:50px;">
+          <tbody>
+            <tr><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td></td><td></td><td></td><td></td><td></td></tr>
+          </tbody>
+        </table>
+
+        <button id="btnTextEraseL" style="position:absolute; bottom:450px; right:260px; width:70px;  height:50px;">&gt;</button>
+        <button id="btnTextReset"  style="position:absolute; bottom:450px; right:120px; width:140px; height:50px;">reset</button>
+        <button id="btnTextEraseR" style="position:absolute; bottom:450px; right:50px;  width:70px;  height:50px;">&lt;</button>
+
+        <input type="text" id="searchText"
+          style="position:absolute; bottom:350px; right:50px; width:280px; height:100px;" />
+        <button id="btnCopyText"
+          style="position:absolute; bottom:312.5px; right:50px; width:280px; height:37.5px; font-size:25px;">Copy text</button>
+
+        <button id="btnSearchN"
+          style="position:absolute; bottom:212.5px; right:190px; width:140px; height:100px;">Naver</button>
+        <button id="btnSearchZ"
+          style="position:absolute; bottom:212.5px; right:50px;  width:140px; height:100px;">Zdic</button>
+
+        <button id="btnExtractMP"
+          style="position:absolute; bottom:156.25px; right:190px; width:140px; height:56.25px; font-size:20px;">extract MP/D</button>
+        <button id="btnCopyText1"
+          style="position:absolute; bottom:100px; right:190px; width:140px; height:56.25px; font-size:25px; line-height:20px">Copy 1</button>
+
+        <button id="btnExtractWords"
+          style="position:absolute; bottom:156.25px; right:50px; width:140px; height:56.25px; font-size:20px;">extract Words</button>
+        <button id="btnCopyText2"
+          style="position:absolute; bottom:100px; right:50px; width:140px; height:56.25px; font-size:25px; line-height:20px">Copy 2</button>
+
+        <textarea id="TA_1"
+          style="position:absolute; bottom:30px; left:49px;  width:345px; height:50px; font-size:15px; line-height:1.2;"></textarea>
+        <textarea id="TA_2"
+          style="position:absolute; bottom:30px; left:419px; width:345px; height:50px; font-size:15px; line-height:1.2;"></textarea>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="./js/mainScript.js"></script>
+</body>
+</html>
