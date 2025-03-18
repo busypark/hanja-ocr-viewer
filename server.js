@@ -4,6 +4,7 @@ import fetch from 'node-fetch';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
+import sharp from 'sharp';
 import { load } from 'cheerio';
 
 const app = express();
@@ -13,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.static('public'));
 app.use(express.json());
-app.use(express.static('./public'));
+app.use(express.static("./public"));
 
 app.post("/api/ocr", async (req, res) => {
   try {
@@ -25,8 +26,10 @@ app.post("/api/ocr", async (req, res) => {
         "Accept-Language": "ko,en;q=0.9,en-US;q=0.8"
       }
     });
-    res.json(await response.json());
+    const data = await response.json();
+    res.json(data);
   } catch (err) {
+    console.error("OCR 요청 실패:", err);
     res.status(500).json({ error: "OCR 요청 실패" });
   }
 });
@@ -41,33 +44,46 @@ app.post("/api/ExtractMP", async (req, res) => {
       "Accept-Language": "ko,en;q=0.9,en-US;q=0.8",
       "Referer": "https://hanja.dict.naver.com/"
     };
-    const searchData = await (await fetch(`https://hanja.dict.naver.com/api3/ccko/search?query=${encodeURIComponent(hanjaText)}&m=pc&range=letter&page=1`, { headers })).json().catch(() => null);
+    const searchUrl = `https://hanja.dict.naver.com/api3/ccko/search?query=${encodeURIComponent(hanjaText)}&m=pc&range=letter&page=1`;
+    const searchData = await (await fetch(searchUrl, { headers })).json().catch(() => null);
     if (!searchData) return res.json({ success: false, error: "1. search request error" });
     const items = searchData?.searchResultMap?.searchResultListMap?.LETTER?.items;
     if (!items || !items.length) return res.json({ success: false, error: "2. empty search list" });
     const entryId = items[0]?.destinationLink?.split("/")[3];
     if (!entryId) return res.json({ success: false, error: "3. entryId error" });
-    const detailData = await (await fetch(`https://hanja.dict.naver.com/api/platform/ccko/entry?entryId=${entryId}&isConjsShowTTS=true&searchResult=false`, { headers })).json().catch(() => null);
+    const detailUrl = `https://hanja.dict.naver.com/api/platform/ccko/entry?entryId=${entryId}&isConjsShowTTS=true&searchResult=false`;
+    const detailData = await (await fetch(detailUrl, { headers })).json().catch(() => null);
     if (!detailData) return res.json({ success: false, error: "4. hanja description request error" });
     const means = detailData?.entry?.means;
     if (!means || !Array.isArray(means)) return res.json({ success: false, error: "4. hanja description request error" });
     const parseList = ["[" + detailData?.entry?.mix_pron.trim() + "]"];
     for (const m of means) {
       let s = "  ".repeat((m.mean_level || 1) - 1);
-      const v = (m.origin_mean || m.show_mean || "").trim();
-      if (v) parseList.push(s + v);
+      const origin = (m.origin_mean || "").trim();
+      const show   = (m.show_mean   || "").trim();
+      if (origin) s += origin; else if (show) s += show; else continue;
+      parseList.push(s);
     }
+    const MP = parseList.join("\n");
+    const learningMores = detailData?.entry?.group?.learningMores;
     const learningMoreList = [];
-    for (const lm of (detailData?.entry?.group?.learningMores || [])) {
+    for (const lm of learningMores) {
       const title = (lm.learning_info_title || "").trim();
-      let body = (lm.learning_info_body || "").trim();
+      const body  = (lm.learning_info_body  || "").trim();
       if (title && body) {
-        if (body.startsWith("<div")) { const $ = load(body); body = $('p.se-text-paragraph.se-text-paragraph-align-').first().text(); }
-        learningMoreList.push(body);
+        let desc = body;
+        if (desc.startsWith("<div")) {
+          const $ = load(desc);
+          desc = $('p.se-text-paragraph.se-text-paragraph-align-').first().text();
+        }
+        learningMoreList.push(desc);
       }
     }
-    res.json({ success: true, data: { MP: parseList.join("\n"), learningMoreList: JSON.stringify(learningMoreList) } });
-  } catch (err) { res.json({ success: false, error: "서버 처리 중 예외 발생" }); }
+    res.json({ success: true, data: { MP, learningMoreList: JSON.stringify(learningMoreList) } });
+  } catch (err) {
+    console.error("서버 에러:", err);
+    res.json({ success: false, error: "서버 처리 중 예외 발생" });
+  }
 });
 
 app.post("/api/ExtractWords", async (req, res) => {
@@ -80,19 +96,31 @@ app.post("/api/ExtractWords", async (req, res) => {
       "Accept-Language": "ko,en;q=0.9,en-US;q=0.8",
       "Referer": "https://hanja.dict.naver.com/"
     };
-    async function search(range, page) {
-      const data = await (await fetch(`https://hanja.dict.naver.com/api3/ccko/search?query=${encodeURIComponent(hanjaText)}&m=pc&range=${range}&page=${page}&shouldSearchOpen=true`, { headers })).json().catch(() => null);
-      return data?.searchResultMap?.searchResultListMap;
+    async function searchExpression(headers, range, page) {
+      const searchUrl = `https://hanja.dict.naver.com/api3/ccko/search?query=${encodeURIComponent(hanjaText)}&m=pc&range=${range}&page=${page}&shouldSearchOpen=true`;
+      const searchResp = await fetch(searchUrl, { headers });
+      const searchData = await searchResp.json().catch(() => null);
+      if (!searchData) return res.json({ success: false, error: "1. search request error" });
+      return searchData?.searchResultMap?.searchResultListMap;
     }
-    const info1 = await (async () => {
-      const data = await (await fetch(`https://hanja.dict.naver.com/api3/ccko/search?query=${encodeURIComponent(hanjaText)}&m=pc&range=wordEntry&page=1&shouldSearchOpen=true`, { headers })).json().catch(() => null);
-      return { totalPages: Math.min(10, data?.pagerInfo?.totalPages || 0) };
-    })();
+    async function retrieveWordEntryInfoPage1(headers) {
+      const searchUrl = `https://hanja.dict.naver.com/api3/ccko/search?query=${encodeURIComponent(hanjaText)}&m=pc&range=wordEntry&page=1&shouldSearchOpen=true`;
+      const searchResp = await fetch(searchUrl, { headers });
+      const searchData = await searchResp.json().catch(() => null);
+      if (!searchData) return res.json({ success: false, error: "retrieveInfoPage1" });
+      const pageSize   = searchData?.pagerInfo?.pageSize;
+      const totalRows  = searchData?.pagerInfo?.totalRows;
+      const totalPages = Math.min(10, searchData?.pagerInfo?.totalPages);
+      return { pageSize, totalRows, totalPages };
+    }
     const keywords = ['조선','고려','신라','백제','고구려','가야','이름.','http://','https://','의 자(字)','의 호(號)','자(字)는','호(號)는'];
+    let wsInfo = (await retrieveWordEntryInfoPage1(headers));
     const wordList = [];
-    for (let page = 1; page <= info1.totalPages; page++) {
+    for (let page = 1; page <= wsInfo.totalPages; page++) {
       if (wordList.length >= 45) break;
-      const items = (await search("wordEntry", page))?.WORDENTRY?.items || [];
+      let wordEntry = (await searchExpression(headers, "wordEntry", page)).WORDENTRY;
+      let items = wordEntry?.items;
+      if (!items || items.length === 0 || Number(wordEntry?.total) === 0) break;
       for (const item of items) {
         if (wordList.length >= 45) break;
         const expEntry      = item?.expEntry.replace(/<\/?strong>/g, '').trim();
@@ -102,16 +130,26 @@ app.post("/api/ExtractWords", async (req, res) => {
         for (const mean of item?.meansCollector[0].means)
           if (mean?.value) meanList.push('> ' + mean?.value.replace(/<\/?strong>/g, ''));
         const meanJoin = meanList.join("\n");
-        if (keywords.some(k => meanJoin.includes(k))) continue;
+        if (keywords.some(keyword => meanJoin.includes(keyword))) continue;
         wordList.push(expEntry + " (" + expKoreanPron + ")\n" + meanJoin);
       }
     }
+    let wordIdiom = (await searchExpression(headers, "wordIdiom", 1)).WORDIDIOM;
+    let total_words = wordIdiom?.total;
+    let items = wordIdiom?.items;
+    if (!items || items.length === 0 || Number(total_words) === 0) { total_words = 0; items = []; }
     const idiomList = [];
-    for (let page = 1; page <= 3; page++) {
-      const result = await search("wordIdiom", page);
-      const wordIdiom = result?.WORDIDIOM;
-      const items = wordIdiom?.items || [];
-      if (!items.length) break;
+    for (const item of items) {
+      const expEntry      = item?.expEntry.replace(/<\/?strong>/g, '').trim();
+      const expKoreanPron = item?.expKoreanPron.replace(/<\/?strong>/g, '').trim();
+      const meanList = [];
+      for (const mean of item?.meansCollector[0].means)
+        if (mean?.value) meanList.push('> ' + mean?.value.replace(/<\/?strong>/g, ''));
+      idiomList.push(expEntry + " (" + expKoreanPron + ")\n" + meanList.join("\n"));
+    }
+    if (16 <= Number(total_words)) {
+      wordIdiom = (await searchExpression(headers, "wordIdiom", 2)).WORDIDIOM;
+      items = wordIdiom?.items || [];
       for (const item of items) {
         const expEntry      = item?.expEntry.replace(/<\/?strong>/g, '').trim();
         const expKoreanPron = item?.expKoreanPron.replace(/<\/?strong>/g, '').trim();
@@ -120,79 +158,90 @@ app.post("/api/ExtractWords", async (req, res) => {
           if (mean?.value) meanList.push('> ' + mean?.value.replace(/<\/?strong>/g, ''));
         idiomList.push(expEntry + " (" + expKoreanPron + ")\n" + meanList.join("\n"));
       }
-      if (Number(wordIdiom?.total) < (page * 15) + 1) break;
+    }
+    if (31 <= Number(total_words)) {
+      wordIdiom = (await searchExpression(headers, "wordIdiom", 3)).WORDIDIOM;
+      items = wordIdiom?.items || [];
+      for (const item of items) {
+        const expEntry      = item?.expEntry.replace(/<\/?strong>/g, '').trim();
+        const expKoreanPron = item?.expKoreanPron.replace(/<\/?strong>/g, '').trim();
+        const meanList = [];
+        for (const mean of item?.meansCollector[0].means)
+          if (mean?.value) meanList.push('> ' + mean?.value.replace(/<\/?strong>/g, ''));
+        idiomList.push(expEntry + " (" + expKoreanPron + ")\n" + meanList.join("\n"));
+      }
     }
     res.json({ success: true, data: { Words: wordList.join("\n\n"), Idioms: idiomList.join("\n\n") } });
-  } catch (err) { res.json({ success: false, error: "서버 처리 중 예외 발생" }); }
+  } catch (err) {
+    console.error("서버 에러:", err);
+    res.json({ success: false, error: "서버 처리 중 예외 발생" });
+  }
 });
 
-// zChar 검색 및 SVG 이미지 획득 (PNG 변환 전)
 app.post("/zChar", async (req, res) => {
   const { zChar } = req.body;
   try {
     const maxDownloads = 5;
-    const headers = { "User-Agent": "Mozilla/5.0", "Accept-Language": "ko,en;q=0.9,en-US;q=0.8" };
-
-    async function fetchZdic(url) {
-      const resp = await axios.get(url, { headers });
-      return resp.data;
-    }
-
-    function parseDivs(html, divClass, filenameSplit) {
-      const links = [];
-      const divs = html.match(new RegExp(`<div class="${divClass}">.*?<\/div>`, 'g'));
-      if (!divs) return links;
-      let i = 0;
-      for (const div of divs) {
-        if (i >= maxDownloads) break;
-        const svgMatch = div.match(/data-original="(.*?)"/);
-        if (!svgMatch) continue;
-        const svgLink = svgMatch[1];
-        const parts = svgLink.split("/");
-        const filename = filenameSplit === "single" ? parts[5] : parts[filenameSplit[0]] + "-" + parts[filenameSplit[1]];
-        const textMatch = div.match(new RegExp(`<div class="${divClass}">(.*?)<\/div>`));
-        const text = textMatch ? textMatch[1] : "";
-        if (filename === ".svg") continue;
-        links.push({ svgLink, filename, text, error: false });
-        i++;
-      }
-      return links;
-    }
-
-    const [html1, html2, html3, html4] = await Promise.all([
-      fetchZdic(`https://www.zdic.net/zd/zx/jg/${zChar}`),
-      fetchZdic(`https://www.zdic.net/zd/zx/jw/${zChar}`),
-      fetchZdic(`https://www.zdic.net/zd/zx/xz/${zChar}`),
-      fetchZdic(`https://www.zdic.net/hans/${zChar}`)
-    ]);
-
-    const GAPsvgLinks = parseDivs(html1, "zy", "single");
-    const GUMsvgLinks = parseDivs(html2, "zy", "single");
-    const SOJsvgLinks = parseDivs(html3, "zy", "single");
-    const HESsvgLinks = parseDivs(html4, "zx", [4, 5]);
-
+    const response1 = await axios.get(`https://www.zdic.net/zd/zx/jg/${zChar}`, { headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "ko,en;q=0.9,en-US;q=0.8" } });
+    const GAPsvgLinks = [];
+    const divs1 = response1.data.match(/<div class="zy">.*?<\/div>/g);
+    if (divs1) { let i = 0; divs1.forEach(div => { if (i >= maxDownloads) return; i++; const svgLink = div.match(/data-original="(.*?)"/)[1]; const filename = svgLink.split("/")[5]; const text = div.match(/<div class="zy">(.*?)<\/div>/)[1]; if (filename === ".svg") return; GAPsvgLinks.push({ svgLink, filename, text }); }); }
+    const response2 = await axios.get(`https://www.zdic.net/zd/zx/jw/${zChar}`, { headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "ko,en;q=0.9,en-US;q=0.8" } });
+    const GUMsvgLinks = [];
+    const divs2 = response2.data.match(/<div class="zy">.*?<\/div>/g);
+    if (divs2) { let i = 0; divs2.forEach(div => { if (i >= maxDownloads) return; i++; const svgLink = div.match(/data-original="(.*?)"/)[1]; const filename = svgLink.split("/")[5]; const text = div.match(/<div class="zy">(.*?)<\/div>/)[1]; if (filename === ".svg") return; GUMsvgLinks.push({ svgLink, filename, text }); }); }
+    const response3 = await axios.get(`https://www.zdic.net/zd/zx/xz/${zChar}`, { headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "ko,en;q=0.9,en-US;q=0.8" } });
+    const SOJsvgLinks = [];
+    const divs3 = response3.data.match(/<div class="zy">.*?<\/div>/g);
+    if (divs3) { let i = 0; divs3.forEach(div => { if (i >= maxDownloads) return; i++; const svgLink = div.match(/data-original="(.*?)"/)[1]; const filename = svgLink.split("/")[5]; const text = div.match(/<div class="zy">(.*?)<\/div>/)[1]; if (filename === ".svg") return; SOJsvgLinks.push({ svgLink, filename, text }); }); }
+    const response4 = await axios.get(`https://www.zdic.net/hans/${zChar}`, { headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "ko,en;q=0.9,en-US;q=0.8" } });
+    const HESsvgLinks = [];
+    const divs4 = response4.data.match(/<div class="zx">.*?<\/div>/g);
+    if (divs4) { let i = 0; divs4.forEach(div => { if (i >= maxDownloads) return; i++; const svgLink = div.match(/data-original="(.*?)"/)[1]; const filename = svgLink.split("/")[4] + "-" + svgLink.split("/")[5]; const text = div.match(/<div class="zx">(.*?)<\/div>/)[1]; if (filename === ".svg") return; HESsvgLinks.push({ svgLink, filename, text }); }); }
+    const divs3_add = response4.data.match(/<div class="swnr">.*?<\/div>/gs);
+    if (divs3_add) { let i = 0; divs3_add.forEach(div => { if (i + SOJsvgLinks.length >= maxDownloads) return; i++; const match = div.match(/data-original="(.*?)"/); if (!match) return; const svgLink = match[1]; const filename = svgLink.split("/")[3] + "-" + svgLink.split("/")[4]; const text = "설문해자 추가"; if (svgLink.indexOf("swxz") === -1) return; if (filename === ".svg") return; SOJsvgLinks.push({ svgLink, filename, text, "error": false }); }); }
     const downloadFiles = async (links, folder) => {
-      for (const link of links) {
+      for (let link of links) {
         try {
           const svgUrl = "https:" + link.svgLink;
           const filePath = path.join("./public/download", folder, link.filename);
           const writer = fs.createWriteStream(filePath);
           const response = await axios.get(svgUrl, { responseType: "stream" });
           response.data.pipe(writer);
-        } catch (err) {
-          link.error = true;
-        }
+        } catch (err) { console.log("Error while downloadFiles: ", link, folder); link.error = true; }
       }
     };
-
-    await Promise.all([
-      downloadFiles(GAPsvgLinks, "GAP"),
-      downloadFiles(GUMsvgLinks, "GUM"),
-      downloadFiles(SOJsvgLinks, "SOJ"),
-      downloadFiles(HESsvgLinks, "HES"),
-    ]);
-
-    res.json({ GAP: GAPsvgLinks, GUM: GUMsvgLinks, SOJ: SOJsvgLinks, HES: HESsvgLinks });
+    await Promise.all([downloadFiles(GAPsvgLinks, "GAP"), downloadFiles(GUMsvgLinks, "GUM"), downloadFiles(SOJsvgLinks, "SOJ"), downloadFiles(HESsvgLinks, "HES")]);
+    let svgDict = { "GAP": GAPsvgLinks, "GUM": GUMsvgLinks, "SOJ": SOJsvgLinks, "HES": HESsvgLinks };
+    const baseDir = path.join('./public', 'download');
+    const keys = ['GAP', 'GUM', 'SOJ', 'HES'];
+    for (const key of keys) {
+      const folderPath = path.join(baseDir, key);
+      const items = svgDict[key];
+      for (let i = 0; i < items.length; i++) {
+        const fileData = items[i];
+        if (fileData.error) continue;
+        const oldFilename = fileData.filename;
+        const svgPath = path.join(folderPath, oldFilename);
+        const newFilename = oldFilename.replace(/\.svg$/i, '.png');
+        const pngPath = path.join(folderPath, newFilename);
+        try {
+          const { data, info } = await sharp(svgPath).resize(1024, 1024).raw().ensureAlpha().toBuffer({ resolveWithObject: true });
+          const pixelCount = info.width * info.height;
+          const newBuffer = Buffer.alloc(pixelCount * 4);
+          for (let j = 0; j < pixelCount; j++) {
+            const r = data[j*4+0], g = data[j*4+1], b = data[j*4+2], a = data[j*4+3];
+            const isBlack = r < 25 && g < 25 && b < 25;
+            if (!(isBlack && a > 25)) { newBuffer[j*4+0]=255; newBuffer[j*4+1]=255; newBuffer[j*4+2]=255; newBuffer[j*4+3]=0; }
+            else { newBuffer[j*4+0]=0; newBuffer[j*4+1]=0; newBuffer[j*4+2]=0; newBuffer[j*4+3]=255; }
+          }
+          await sharp(newBuffer, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toFile(pngPath);
+          fs.unlinkSync(svgPath);
+          fileData.filename = newFilename;
+        } catch (err) { console.error(`Error processing ${svgPath}:`, err); return res.status(500).json({ error: `Failed to process ${oldFilename}` }); }
+      }
+    }
+    res.json(svgDict);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "서버에서 처리하는 동안 오류가 발생했습니다." });
@@ -201,8 +250,8 @@ app.post("/zChar", async (req, res) => {
 
 try {
   app.listen(PORT, hostname, () => {
-    console.log(`Server listening on http://${hostname}:${PORT}`);
+    console.log(`🚀 Server listening on http://${hostname}:${PORT}`);
   });
 } catch (error) {
-  console.error('Error starting the server:', error);
+  console.error("Error starting the server:", error);
 }
