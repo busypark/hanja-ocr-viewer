@@ -1,21 +1,21 @@
-﻿# 탭 기반 멀티 검색 UI 구현
+﻿# 한자 서체 이미지 뷰어 탭 구현
 
-단일 정적 페이지 방식에서 동적 탭 생성 방식으로 전면 전환.
+Zdic 검색 결과를 Char 탭으로 분리 표시하고 이미지 확대 모달을 구현.
 
 ## 변경사항
 
-- `public/index.html`: 최소 구조로 축소 — `#mainTabComponent` + 빈 `.tab-content` / `.tab-buttons` 영역만 유지
-- `public/js/mainScript.js`: ES 모듈(`type="module"`) 방식으로 변경, `create_searchTab()` 호출로 초기 탭 생성
-- `createORremoveTabs/createSearchTab.js` (신규): Search 탭 전체 HTML + 이벤트를 동적 생성
-  - Replicate 버튼: 새 Search 탭 추가
-  - Cancel 버튼: 현재 탭 제거 (최소 1개 유지, 2개 이상일 때만 활성화)
-  - Zdic 버튼: 서버 요청 후 콘솔 출력 (차탭 미구현)
-- `createORremoveTabs/removeSearchTab.js` (신규): 탭 제거 및 인접 탭 활성화, index 재배치
+- `createORremoveTabs/createCharTab.js` (신규): Char 탭 동적 생성
+  - 4종 서체(갑골문·금문·소전·해서)별 150×150px 이미지 그리드
+  - 레이블: 흰색(검색 한자 `「」` 내 일치) / 노란색(불일치 경고)
+  - 이미지 클릭 → 해상도 선택(256/512/1024px) → 확대 모달 오버레이 (scale 애니메이션)
+  - Cancel 버튼으로 탭 제거
+- `createORremoveTabs/removeCharTab.js` (신규): Char 탭 제거 및 인접 탭 활성화
+- `createORremoveTabs/createSearchTab.js`: Zdic 버튼 → `create_charTab()` 연동
 
 ## 화면
 
 ![](./images/a.jpg)
-<p align="center"><탭 기반 UI - Search 탭></p>
+<p align="center"><Char 탭 - 4종 서체 이미지 그리드 (갑골문·금문·소전·해서)></p>
 
 ![](./images/b.jpg)
-<p align="center"><Replicate로 탭 여러 개 생성 (Cancel 버튼 활성화 상태)></p>
+<p align="center"><이미지 클릭 시 확대 모달 (해상도 선택 후)></p>
