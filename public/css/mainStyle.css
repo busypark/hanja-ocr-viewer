@@ -1,0 +1,221 @@
+/* 기본 설정 */
+body {
+  overscroll-behavior: none;
+  background-color: #000000;
+  color: #ffffff;
+  font-family: sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* 탭 전체 컴포넌트 */
+#mainTabComponent {
+  display: flex;
+  width: 960px;
+  height: 1260px;
+  margin: 0 auto;
+  position: absolute;
+  left: 15px;
+  top: 15px;
+  background-color: #000000;
+}
+
+/* 탭 버튼 목록 (오른쪽 세로) */
+.tab-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 10px;
+  background-color: #111111;
+}
+
+/* 각 탭 버튼 */
+.tab-button {
+  writing-mode: unset;
+  text-orientation: unset;
+  border: 2px solid #ffffff;
+  background: transparent;
+  color: #ffffff;
+  font-size: 30px;
+  padding: 0 5px;
+  cursor: pointer;
+  border-radius: 5px;
+  height: 70px;
+  line-height: 0;
+}
+
+.tab-button.active {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 탭 콘텐츠 영역 */
+.tab-content {
+  flex: 1;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 0;
+}
+
+.tab-panel {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease;
+  height: 0;
+  overflow: hidden;
+}
+
+.tab-panel.active {
+  opacity: 1;
+  visibility: visible;
+  position: absolute;
+  width: 831.984px;
+  height: 1260.010px;
+}
+
+/* 버튼 기본 스타일 */
+button {
+  background: transparent;
+  border: 2px solid #ffffff;
+  color: #ffffff;
+  cursor: pointer;
+  border-radius: 5px;
+  font-size: 42px;
+  text-align: center;
+  line-height: 0;
+  padding: 0;
+}
+
+/* 비활성화 버튼 스타일 */
+button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  font-size: 42px;
+}
+
+/* 텍스트 입력 필드 스타일 */
+input[type="text"] {
+  background: #111111;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  border-radius: 5px;
+  font-size: 50px;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+/* 캔버스 스타일 */
+#ocrCanvas {
+  display: block;
+  background-color: #222222;
+  margin: 80px auto 0 auto;
+  border: 2px solid #fff200;
+}
+
+/* Pen, Erase 버튼 강조색 */
+#btnPen, #btnErase {
+  border-color: #fff200;
+  color: #fff200;
+}
+
+/* Search N 버튼 */
+#btnSearchN, #btnExtractMP, #btnExtractWords {
+  border-color: #00ff00;
+  color: #00ff00;
+}
+
+/* Search Z 버튼 */
+#btnSearchZ {
+  border-color: #ff0000;
+  color: #ff0000;
+}
+
+/* 결과 테이블 */
+#ocrResultTable {
+  table-layout: fixed;
+  border-collapse: collapse;
+  width: 435px;
+  height: 400px;
+}
+
+#ocrResultTable td {
+  width: 87px;
+  height: 100px;
+  border: 1px solid #fff200;
+  box-sizing: border-box;
+}
+
+/* 갑/금/소/해 글자 */
+#typeChar {
+  position: absolute;
+  font-size: 50px;
+  top: 107px;
+  line-height: 0;
+}
+
+/* char 캔버스 스타일 */
+#charCanvas {
+  display: block;
+  background-color: #aaaaaa;
+  margin: 80px auto 0 auto;
+  border: 3px solid #666666;
+  position: absolute;
+  width: 150px;
+  height: 150px;
+}
+
+/* 어두운 배경 오버레이 */
+.preview-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+/* previewContainer 스타일 */
+.preview-container {
+  position: absolute;
+  background-color: white;
+  border: 3px solid #666;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.preview-overlay.show { opacity: 1; }
+.preview-container.show { opacity: 1; transform: scale(1); }
+
+#charLabel {
+  width: 150px;
+  font-size: 16px;
+  color: #ffffff;
+  line-height: 16px;
+}
+
+/* 256, 512, 1024 버튼 강조색 */
+#btn256, #btn512, #btn1024 {
+  border-color: #fff200;
+  color: #fff200;
+  position: absolute;
+  top: 1175px;
+  width: 130px;
+  height: 70px;
+}
+
+/* 마우스 오버 효과 */
+button:hover:enabled {
+  background-color: rgba(255, 255, 255, 0.1);
+  transition: background-color 0.2s ease;
+}
+
+button:active:enabled {
+  background-color: rgb(126, 124, 255);
+  transition: background-color 0.2s ease;
+}
