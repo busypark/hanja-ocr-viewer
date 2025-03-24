@@ -1,21 +1,24 @@
-﻿# 코드 모듈화 리팩토링
+﻿# 상태 관리 및 모드 전환 모듈 분리
 
-`createSearchTab.js`에 인라인으로 포함되어 있던 캔버스·OCR 로직을 기능별 독립 모듈로 분리.
+Pen/Erase/Clear 모드 전환 로직을 `modeSwitcher.js`로 분리하여 모듈 구조 완성.
 
 ## 변경사항
 
 | 신규 파일 | 분리된 기능 |
 |-----------|------------|
-| `canvasDraw.js` | 마우스·터치 획 그리기 이벤트 처리 |
-| `canvasErase.js` | 지우개 이벤트, 캔버스 재렌더링 |
-| `canvasClear.js` | 전체 지우기 및 OCR 초기화 |
-| `ocrProcessor.js` | 좌표 압축·InputStr 생성·fetch·테이블 렌더링 |
-| `state.js` | `canvas.dataset` 기반 모드·획 데이터 상태 관리 |
-| `backup_mainScript.js` | 모듈화 이전 단일 파일 백업본 |
+| `modeSwitcher.js` | Pen/Erase 버튼 이벤트, Clear 시 모드 복귀 (`setupModeSwitcher`) |
 
-- `createSearchTab.js`: 인라인 코드 → 위 모듈 `import` 방식으로 교체  
-  (Pen/Erase/Clear 모드 전환은 아직 인라인)
+- `createSearchTab.js`: 인라인 모드 전환 코드 → `setupModeSwitcher(ocrCanvas, btnPen, btnErase, btnClear)` 호출로 교체
+
+## 모듈 의존 구조
+
+```
+createSearchTab.js
+  ├── modeSwitcher.js  → state.js, canvasClear.js
+  ├── canvasDraw.js    → state.js, ocrProcessor.js
+  └── canvasErase.js   → state.js, ocrProcessor.js
+```
 
 ## 참고
 
-기능 동작은 이전 커밋과 완전히 동일. 파일 구조만 변경됨.
+기능 동작은 이전 커밋과 완전히 동일. 최종 모듈 구조 완성.
