@@ -182,33 +182,73 @@ app.post("/zChar", async (req, res) => {
   const { zChar } = req.body;
   try {
     const maxDownloads = 5;
-    const response1 = await axios.get(`https://www.zdic.net/zd/zx/jg/${zChar}`, { headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "ko,en;q=0.9,en-US;q=0.8" } });
-    const GAPsvgLinks = [];
-    const divs1 = response1.data.match(/<div class="zy">.*?<\/div>/g);
-    if (divs1) { let i = 0; divs1.forEach(div => { if (i >= maxDownloads) return; i++; const svgLink = div.match(/data-original="(.*?)"/)[1]; const filename = svgLink.split("/")[5]; const text = div.match(/<div class="zy">(.*?)<\/div>/)[1]; if (filename === ".svg") return; GAPsvgLinks.push({ svgLink, filename, text }); }); }
-    const response2 = await axios.get(`https://www.zdic.net/zd/zx/jw/${zChar}`, { headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "ko,en;q=0.9,en-US;q=0.8" } });
-    const GUMsvgLinks = [];
-    const divs2 = response2.data.match(/<div class="zy">.*?<\/div>/g);
-    if (divs2) { let i = 0; divs2.forEach(div => { if (i >= maxDownloads) return; i++; const svgLink = div.match(/data-original="(.*?)"/)[1]; const filename = svgLink.split("/")[5]; const text = div.match(/<div class="zy">(.*?)<\/div>/)[1]; if (filename === ".svg") return; GUMsvgLinks.push({ svgLink, filename, text }); }); }
-    const response3 = await axios.get(`https://www.zdic.net/zd/zx/xz/${zChar}`, { headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "ko,en;q=0.9,en-US;q=0.8" } });
-    const SOJsvgLinks = [];
-    const divs3 = response3.data.match(/<div class="zy">.*?<\/div>/g);
-    if (divs3) { let i = 0; divs3.forEach(div => { if (i >= maxDownloads) return; i++; const svgLink = div.match(/data-original="(.*?)"/)[1]; const filename = svgLink.split("/")[5]; const text = div.match(/<div class="zy">(.*?)<\/div>/)[1]; if (filename === ".svg") return; SOJsvgLinks.push({ svgLink, filename, text }); }); }
-    const response4 = await axios.get(`https://www.zdic.net/hans/${zChar}`, { headers: { "User-Agent": "Mozilla/5.0", "Accept-Language": "ko,en;q=0.9,en-US;q=0.8" } });
+    const axHeaders = { "User-Agent": "Mozilla/5.0", "Accept-Language": "ko,en;q=0.9,en-US;q=0.8" };
+
+    // 신규 HTML 구조: <div class="glyph-item"> + <img src="..."> + <div class="caption">
+    // img src의 마지막 세그먼트(filename)만 추출 후 img.zdic.net 절대 URL로 재조합
+    function parseGlyphItems(html, imgType) {
+      const links = [];
+      const re = /<div class="glyph-item">\s*<span class="img-wrap"><img src="([^"]+)"[^>]*><\/span>\s*<div class="caption">([^<]*)<\/div>/g;
+      let m;
+      while ((m = re.exec(html)) !== null && links.length < maxDownloads) {
+        const filename = m[1].split("/").pop();
+        if (!filename || !filename.endsWith(".svg")) continue;
+        const svgUrl = `https://img.zdic.net/zy/${imgType}/${filename}`;
+        links.push({ svgUrl, filename, text: m[2].trim(), error: false });
+      }
+      return links;
+    }
+
+    const enc = encodeURIComponent(zChar);
+    const [r1, r2, r3, r4] = await Promise.all([
+      axios.get(`https://zdic.net/hans/${enc}/jiaguwen`,  { headers: axHeaders }).catch(() => null),
+      axios.get(`https://zdic.net/hans/${enc}/jinwen`,    { headers: axHeaders }).catch(() => null),
+      axios.get(`https://zdic.net/hans/${enc}/xiaozhuan`, { headers: axHeaders }).catch(() => null),
+      axios.get(`https://zdic.net/hans/${enc}`,           { headers: axHeaders }).catch(() => null),
+    ]);
+
+    const GAPsvgLinks = r1 ? parseGlyphItems(r1.data, "jiaguwen")  : [];
+    const GUMsvgLinks = r2 ? parseGlyphItems(r2.data, "jinwen")    : [];
+    const SOJsvgLinks = r3 ? parseGlyphItems(r3.data, "xiaozhuan") : [];
+
+    // HES(해서): 전용 페이지 없음 — 메인 페이지 glyph-compare 섹션에서 5개 지역 이미지 추출
+    // img URL 패턴: img.zdic.net/kai/{region}/{unicode}.svg
     const HESsvgLinks = [];
-    const divs4 = response4.data.match(/<div class="zx">.*?<\/div>/g);
-    if (divs4) { let i = 0; divs4.forEach(div => { if (i >= maxDownloads) return; i++; const svgLink = div.match(/data-original="(.*?)"/)[1]; const filename = svgLink.split("/")[4] + "-" + svgLink.split("/")[5]; const text = div.match(/<div class="zx">(.*?)<\/div>/)[1]; if (filename === ".svg") return; HESsvgLinks.push({ svgLink, filename, text }); }); }
-    const divs3_add = response4.data.match(/<div class="swnr">.*?<\/div>/gs);
-    if (divs3_add) { let i = 0; divs3_add.forEach(div => { if (i + SOJsvgLinks.length >= maxDownloads) return; i++; const match = div.match(/data-original="(.*?)"/); if (!match) return; const svgLink = match[1]; const filename = svgLink.split("/")[3] + "-" + svgLink.split("/")[4]; const text = "설문해자 추가"; if (svgLink.indexOf("swxz") === -1) return; if (filename === ".svg") return; SOJsvgLinks.push({ svgLink, filename, text, "error": false }); }); }
+    const hesRegions = [
+      { alt: "中国大陆", code: "cn", label: "中国大陆" },
+      { alt: "香港",     code: "hk", label: "香港" },
+      { alt: "台湾",     code: "tw", label: "台湾" },
+      { alt: "日本",     code: "jp", label: "日本" },
+      { alt: "韩国",     code: "kr", label: "韩国" },
+    ];
+    const cnMatch = r4 && /class="glyph-compare__item">\s*<img src="([^"]+)"[^>]*alt="中国大陆"/.exec(r4.data);
+    if (cnMatch) {
+      const baseFilename = cnMatch[1].split("/").pop();
+      if (baseFilename && baseFilename.endsWith(".svg")) {
+        for (const { code, label } of hesRegions) {
+          HESsvgLinks.push({
+            svgUrl: `https://img.zdic.net/kai/${code}/${baseFilename}`,
+            filename: `${code}_${baseFilename}`,
+            text: `楷书 (${label})`,
+            error: false
+          });
+        }
+      }
+    }
+
     const downloadFiles = async (links, folder) => {
-      for (let link of links) {
+      fs.mkdirSync(path.join("./public/download", folder), { recursive: true });
+      for (const link of links) {
         try {
-          const svgUrl = "https:" + link.svgLink;
           const filePath = path.join("./public/download", folder, link.filename);
-          const writer = fs.createWriteStream(filePath);
-          const response = await axios.get(svgUrl, { responseType: "stream" });
-          response.data.pipe(writer);
-        } catch (err) { console.log("Error while downloadFiles: ", link, folder); link.error = true; }
+          const response = await axios.get(link.svgUrl, { responseType: "stream" });
+          await new Promise((resolve, reject) => {
+            const writer = fs.createWriteStream(filePath);
+            response.data.pipe(writer);
+            writer.on('finish', resolve);
+            writer.on('error', reject);
+          });
+        } catch (err) { console.log("Error while downloadFiles:", link.filename, folder); link.error = true; }
       }
     };
     await Promise.all([downloadFiles(GAPsvgLinks, "GAP"), downloadFiles(GUMsvgLinks, "GUM"), downloadFiles(SOJsvgLinks, "SOJ"), downloadFiles(HESsvgLinks, "HES")]);
@@ -238,7 +278,7 @@ app.post("/zChar", async (req, res) => {
           await sharp(newBuffer, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toFile(pngPath);
           fs.unlinkSync(svgPath);
           fileData.filename = newFilename;
-        } catch (err) { console.error(`Error processing ${svgPath}:`, err); return res.status(500).json({ error: `Failed to process ${oldFilename}` }); }
+        } catch (err) { console.error(`Error processing ${svgPath}:`, err); fileData.error = true; }
       }
     }
     res.json(svgDict);
